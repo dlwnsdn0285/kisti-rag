@@ -13,6 +13,8 @@ from pipeline.util.kisti_data import sample_kisti, get_sample_paper, get_sample_
 from pipeline.util.dense_runnable import DenseRetrieverWithHyde
 from pipeline.common import input_path, output_path
 
+import argparse
+
 DENSE='dense'
 SPARSE='sparse'
 ENSEMBLE='ensemble'
@@ -22,19 +24,15 @@ def create_sample_data(sample_paper_num, sample_qa_num):
     print(len(get_sample_paper()))
     print(len(get_sample_qa()))
 
-def retrieval_chain(retriever_type, hyde):
+def retrieval_chain(retriever_type, args):
     base_subdirectory = f'eval_retriever/{retriever_type}'
     eval_logger = setup_logger('eval_retriever', subdirectory=base_subdirectory)
-    hyde_logger = setup_logger('hyde', subdirectory=base_subdirectory) if hyde==True else None
+    hyde_logger = setup_logger('hyde', subdirectory=base_subdirectory) if args.hyde==True else None
 
     ks = [4, 8]
 
     sparse_retriever = get_simple_retriever('bm25', 500, 50)
-    dense_retriever = DenseRetrieverWithHyde(
-        get_sentence_parent_retriever(500, 125), 
-        hyde=hyde, 
-        hyde_logger=hyde_logger
-    )
+    dense_retriever = DenseRetrieverWithHyde(get_simple_retriever('dense', 500, 50), hyde=args.hyde, hyde_logger=hyde_logger)
 
     retriever_map = {
         'sparse': sparse_retriever,
@@ -52,40 +50,44 @@ def retrieval_chain(retriever_type, hyde):
         result = eval_retriever(
             retriever_map[retriever_type], 
             k, 
-            hyde=hyde, 
+            hyde=args.hyde, 
             eval_logger=eval_logger, 
             hyde_logger=hyde_logger
         )
-        eval_logger.info(f"Result: retriever={retriever_type}, k={k}, hyde={hyde}, result={result}")
+        eval_logger.info(f"Result: retriever={retriever_type}, k={k}, hyde={args.hyde}, result={result}")
         print(f'{retriever_type}', k, result)
 
-def full_chain(retriever_type, hyde):
-    base_subdirectory = f'eval_full_chain/{retriever_type}'
-    eval_logger = setup_logger('eval_full_chain', subdirectory=base_subdirectory)
-    hyde_logger = setup_logger('hyde', subdirectory=base_subdirectory) if hyde==True else None
+def full_chain(args):
 
+    # retriever 분기 (sparse/dense/ensemble/qudar) -> 정해진 하나의 retriever : decided_retriever
     ks = [8]
 
     sparse_retriever = get_simple_retriever('bm25', 500, 50)
-    dense_retriever = DenseRetrieverWithHyde(get_sentence_parent_retriever(500, 125), hyde=hyde, hyde_logger=hyde_logger)
+    dense_retriever = DenseRetrieverWithHyde(get_simple_retriever('dense', 500, 50), hyde=args.hyde, hyde_logger=hyde_logger)
 
-    retriever_map = {
-        'dense': dense_retriever,
-        'sparse': sparse_retriever,
-        'ensemble': EnsembleRetriever(
-            retrievers=[dense_retriever, sparse_retriever],
-            weights=[0.5, 0.5]
-        )
-    }
+    decided_retriever = None #####
 
-    if retriever_type not in retriever_map:
-        raise ValueError(f"Unknown retriever type: {retriever_type}.")
-    
-    for k in ks:
-        result=eval_full_chain(retriever_map[retriever_type], k, input_path=input_path, output_path=output_path, hyde=hyde, eval_logger=eval_logger, hyde_logger=hyde_logger)
+    base_subdirectory = f'eval_full_chain/{decided_retriever}'
+    eval_logger = setup_logger('eval_full_chain', subdirectory=base_subdirectory)
+    hyde_logger = setup_logger('hyde', subdirectory=base_subdirectory) if args.hyde==True else None
+
+
+    for k in ks: # [MODIFIED] args, decided_retriever added
+        result=eval_full_chain(args, decided_retriever, k, input_path=input_path, output_path=output_path, eval_logger=eval_logger, hyde_logger=hyde_logger)
         print(k, result)
 
 if __name__ == '__main__':
     #create_sample_data(3,30)
-    retrieval_chain(ENSEMBLE, True)
-    #full_chain(ENSEMBLE, True)
+    #retrieval_chain(ENSEMBLE, args)
+    
+    QUDAR_CHOICES = ["QUDAR_simple_rrf", "QUDAR_simple_equal", "QUDAR_confidence", "QUDAR_llm"]
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--hyde', type=bool, help='Enable HyDE', default=False)
+    parser.add_argument('--rerank', type=bool, help='Enable Reranking', default=False)
+    parser.add_argument('--adaptive', type=bool, help='Enable adaptive retrieval', default=False)
+    parser.add_argument('--retriever', type=str, choices=[DENSE, SPARSE, ENSEMBLE] + QUDAR_CHOICES, default=DENSE)
+    parser.add_argument('--generation', type=str, choices =['base', 'recomp', 'ext2gen'], default='base')
+    args = parser.parse_args()
+    
+    full_chain(args)

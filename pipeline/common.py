@@ -15,7 +15,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 embedding_model = 'intfloat/multilingual-e5-large-instruct'
 embedding_dir = 'embed'
 log_dir = 'logs'
-model_name = 'Qwen/Qwen2-7B-Instruct'
+model_name = 'Qwen/Qwen2.5-7B-Instruct' #"KISTI-KONI/KONI-4B-instruct-20250901"
 input_path = 'results/generated_answer.json'
 output_path = 'results/evaluation.json'
 

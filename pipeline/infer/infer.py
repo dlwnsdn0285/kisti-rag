@@ -19,8 +19,7 @@ from ..adaptive.integrate_classifier import adaptive_classify # for adaptive cla
 from ..common import model_name
 import argparse
 from ..recomp.get_recomp_result import recomp_extractive_docs # when use recomp
-from ..ext2gen.get_ext2en_koni4b import generate_koni4b_dpo # when use ext2gen
-from ..ext2gen.get_ext2gen_qwen7b import generate_qwen7b_dpo # when use ext2gen
+from ..ext2gen.get_ext2gen import ext2gen_model
 
 data = get_sample_qa()
 '''
@@ -72,12 +71,7 @@ def get_retrieval_chain(args, retriever, k, shuffle=False):
     
     # ext2gen pre-trained generation models
     if args.ext2gen:
-        if model_name == "Qwen/Qwen2.5-7B-Instruct":
-            generate_ext2gen = generate_qwen7b_dpo
-        elif model_name == "KISTI-KONI/KONI-4B-instruct-20250901":
-            generate_ext2gen = generate_koni4b_dpo
-        else:
-            assert model_name in ["Qwen/Qwen2.5-7B-Instruct", "KISTI-KONI/KONI-4B-instruct-20250901"]
+        generate_ext2gen = ext2gen_model()
     else:
         generate_ext2gen = generate
 

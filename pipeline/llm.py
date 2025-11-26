@@ -17,6 +17,66 @@ model = AutoModelForCausalLM.from_pretrained(
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
+# [MODIFIED]
+# koni prompt 추가해야함 (형식 통일)
+# added for no retrieval generation prompt
+def qwen_format_prompt_wo_retrieval(query):
+    PROMPT = f"""
+    Answer the following question.
+    When answering, do not repeat the question, and only provide the correct answer in korean.
+    Provide the answer only in JSON format as {{"Answer":"Your answer"}}.
+    Answer should be Korean.
+    ——————————
+    Question: {query}
+    Answer: Korean
+    """
+    return PROMPT
+
+def qwen_format_prompt(query, retrieved_documents):
+    PROMPT = f"""
+    Answer the QUERY below. Refer to the provided CONTEXT if needed.
+    QUERY: {query}
+    CONTEXT: {retrieved_documents}
+    Instructions:
+    - Answer only the query directly and naturally
+    - Do not evaluate or analyze the context
+    - Do not mention the context, documents, or sources in your response
+    - Response must be in JSON format only
+    JSON format:
+    {{"Answer": "your direct answer here"}}
+    """
+    return PROMPT
+
+# prompt for koni w/o retrieved docs (need to be added!!)
+def koni_format_prompt_wo_retrieval(query):
+    PROMPT = f"""
+    Answer the following question.
+    When answering, do not repeat the question, and only provide the correct answer in korean.
+    Provide the answer only in JSON format as {{"Answer":"Your answer"}}.
+    Answer should be Korean.
+    ——————————
+    Question: {query}
+    Answer: Korean
+    """
+    return PROMPT
+
+# prompt for koni with retrieved docs (need to be added!!)
+def koni_format_prompt(query, retrieved_documents):
+    PROMPT = f"""
+    Answer the QUERY below. Refer to the provided CONTEXT if needed.
+    QUERY: {query}
+    CONTEXT: {retrieved_documents}
+    Instructions:
+    - Answer only the query directly and naturally
+    - Do not evaluate or analyze the context
+    - Do not mention the context, documents, or sources in your response
+    - Response must be in JSON format only
+    JSON format:
+    {{"Answer": "your direct answer here"}}
+    """
+    return PROMPT
+
+
 def format_prompt(query, retrieved_documents):
     PROMPT = f"""
     Based on the given reference documents, answer the following question.

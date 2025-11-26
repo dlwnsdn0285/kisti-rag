@@ -1,8 +1,8 @@
-import json
+import json, re
 import random
 from tqdm import tqdm
 
-from ..common import remove_metadata
+from ..common import remove_metadata, model_name, ext2gen_koni4b_path, ext2gen_qwen7b_path
 from ..llm import format_prompt, generate, hyde_generate
 from .retriever import get_k_from_retriever
 from ..eval.eval import evaluate_by_dicts
@@ -10,11 +10,20 @@ from ..eval.llama3_eval import llm_output_file_path, RAG_eval_w_LLM
 from ..common import text_wrap, input_path as input_file_path, output_path as output_file_path
 from .retriever import get_k_from_retriever
 from ..util.kisti_data import get_sample_qa, get_question, get_answer
-from .reranking import get_retrieval_chain_w_rerank
+from .reranking import doc_reranker
 from .hyde import format_hyde_prompt
 
-data = get_sample_qa()
+# [MODIFIED]
+from ..llm import qwen_format_prompt_wo_retrieval, qwen_format_prompt, koni_format_prompt_wo_retrieval, koni_format_prompt # prompt format for no_retrieval
+from ..adaptive.integrate_classifier import adaptive_classify # for adaptive classifier inference
+from ..common import model_name
+import argparse
+from ..recomp.get_recomp_result import recomp_extractive_docs # when use recomp
+from ..ext2gen.get_ext2en_koni4b import generate_koni4b_dpo # when use ext2gen
+from ..ext2gen.get_ext2gen_qwen7b import generate_qwen7b_dpo # when use ext2gen
 
+data = get_sample_qa()
+'''
 def clean_output(output):
     """Returns LLM's answer from its output
     Assumes output is in JSON format of {'Answer':answer}.
@@ -29,7 +38,96 @@ def clean_output(output):
         return str(d['Answer'])
     except:
         return f'JSON parse error({json_text})'
+        '''
+# new answer parsing function
+def clean_output(output):
+    if isinstance(output, list):
+        text = ''.join(output)
+    else:
+        text = output
+    
+    answer_matches = re.findall(r'"Answer"\s*:\s*"([^"]*)"', text)
+    answer = answer_matches if answer_matches else [output]
 
+    return answer
+# rerank, koni prompt
+# [MODIFIED] for adaptive/qudar/ext2gen/recomp branch
+def get_retrieval_chain(args, retriever, k, shuffle=False):
+    """Returns function that acts as retrieval chain with given retriever
+    Note that it is not the retrieval chain in the Langchain framework, but just a function with string input and output.
+    """
+    
+    # reranked_docs : wrapper function for reranking
+    if args.rerank:
+        reranked_docs = doc_reranker
+    else:
+        reranked_docs = lambda x, y : y
+    
+    # recomp_docs : wrapper function for recomp/base
+    if args.recomp:
+        recomp_docs = recomp_extractive_docs # <recomp_module.method> # when use recomp
+    else:
+        recomp_docs = lambda x, y, z : y # use original docs, w/o recomp
+    
+    # ext2gen generation models
+    if args.ext2gen:
+        if model_name == "Qwen/Qwen2.5-7B-Instruct":
+            generate_ext2gen = generate_qwen7b_dpo
+        elif model_name == "KISTI-KONI/KONI-4B-instruct-20250901":
+            generate_ext2gen = generate_koni4b_dpo
+        else:
+            assert model_name in ["Qwen/Qwen2.5-7B-Instruct", "KISTI-KONI/KONI-4B-instruct-20250901"]
+    else:
+        generate_ext2gen = generate
+    
+    if model_name == "Qwen/Qwen2.5-7B-Instruct":
+        format_prompt_w_retrieval = qwen_format_prompt
+        format_prompt_wo_retrieval = qwen_format_prompt_wo_retrieval
+    elif model_name == "KISTI-KONI/KONI-4B-instruct-20250901":
+        format_prompt_w_retrieval = koni_format_prompt
+        format_prompt_wo_retrieval = koni_format_prompt_wo_retrieval
+    else:
+        assert model_name in ["Qwen/Qwen2.5-7B-Instruct", "KISTI-KONI/KONI-4B-instruct-20250901"]
+        # error! not appropriate model name
+    
+    def adaptive_retrieval_chain(query):
+        if adaptive_classify(query): # need retrieval
+            docs = get_k_from_retriever(retriever, k, query)
+            if shuffle:
+                random.shuffle(docs)
+            docs = reranked_docs(query, docs)
+            docs = recomp_docs(query, docs, sentence_top_k=20) # when use recomp
+            if args.recomp:
+                context = '\n'.join(docs) # recomp_docs returns list of sentences
+            else:
+                context = '\n'.join([remove_metadata(doc.page_content) for doc in docs])
+            formatted_prompt = format_prompt_w_retrieval(query, context)
+        else: # no need retrieval
+            formatted_prompt = format_prompt_wo_retrieval(query)
+        output = generate_ext2gen(formatted_prompt)
+        return output
+    
+    def retrieval_chain(query):
+        docs = get_k_from_retriever(retriever, k, query)
+        if shuffle:
+            random.shuffle(docs)
+        docs = reranked_docs(query, docs)
+        docs = recomp_docs(query, docs, sentence_top_k=20) # when use recomp
+        if args.recomp:
+                context = '\n'.join(docs) # recomp_docs returns list of sentences
+        else:
+            context = '\n'.join([remove_metadata(doc.page_content) for doc in docs])
+        formatted_prompt = format_prompt_w_retrieval(query, context)
+        output = generate_ext2gen(formatted_prompt)
+        return output
+    
+    if args.adaptive:
+        return adaptive_retrieval_chain
+    else:
+        return retrieval_chain
+        
+        
+'''
 def get_retrieval_chain(retriever, k, shuffle=False):
     """Returns function that acts as retrieval chain with given retriever
     Note that it is not the retrieval chain in the Langchain framework, but just a function with string input and output.
@@ -43,6 +141,7 @@ def get_retrieval_chain(retriever, k, shuffle=False):
         output = generate(formatted_prompt)
         return output
     return retrieval_chain
+'''
 
 # Evaluation metric function for eval_retriever
 def included_ratio(answer, docs):
@@ -100,20 +199,17 @@ def eval_retriever(retriever, k, num_of_tests=len(data), hyde=False, eval_logger
     return final_ratio
 
 # Main evaluation functions
-def eval_full_chain(retriever, k, num_of_tests=len(data), shuffle=False, rerank=False, verbose=False, 
-                   input_path=input_file_path, output_path=output_file_path, hyde=False, 
+def eval_full_chain(args, decided_retriever, k, num_of_tests=len(data), shuffle=False, verbose=False, 
+                   input_path=input_file_path, output_path=output_file_path,
                    eval_logger=None, hyde_logger=None):
     separator = "-" * 50
 
     if eval_logger:
-        eval_logger.info(f"Starting evaluation: k={k}, num_of_tests={num_of_tests}, hyde={hyde}")
+        eval_logger.info(f"Starting evaluation: k={k}, num_of_tests={num_of_tests}, hyde={args.hyde}")
     
     print('Creating Retrieval Chain...')
-    if rerank:
-        retrieval_chain = get_retrieval_chain_w_rerank(retriever, k)
-    else:
-        retrieval_chain = get_retrieval_chain(retriever, k, shuffle)
-    
+    retrieval_chain = get_retrieval_chain(args, decided_retriever, k, shuffle) # decided_retriever : main.py에서 정해진 retriever
+            
     print('Create Input...')
     inputs = list(map(get_question, range(num_of_tests)))
     print('Running Inference...')

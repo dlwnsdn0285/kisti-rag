@@ -50,6 +50,7 @@ def clean_output(output):
     answer = answer_matches if answer_matches else [output]
 
     return answer
+
 # rerank, koni prompt
 # [MODIFIED] for adaptive/qudar/ext2gen/recomp branch
 def get_retrieval_chain(args, retriever, k, shuffle=False):
@@ -79,7 +80,7 @@ def get_retrieval_chain(args, retriever, k, shuffle=False):
             assert model_name in ["Qwen/Qwen2.5-7B-Instruct", "KISTI-KONI/KONI-4B-instruct-20250901"]
     else:
         generate_ext2gen = generate
-    
+
     if model_name == "Qwen/Qwen2.5-7B-Instruct":
         format_prompt_w_retrieval = qwen_format_prompt
         format_prompt_wo_retrieval = qwen_format_prompt_wo_retrieval

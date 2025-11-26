@@ -2,7 +2,7 @@ import json, re
 import random
 from tqdm import tqdm
 
-from ..common import remove_metadata, model_name, ext2gen_koni4b_path, ext2gen_qwen7b_path
+from ..common import remove_metadata, model_name, input_path_ragchecker
 from ..llm import format_prompt, generate, hyde_generate
 from .retriever import get_k_from_retriever
 from ..eval.eval import evaluate_by_dicts
@@ -70,7 +70,7 @@ def get_retrieval_chain(args, retriever, k, shuffle=False):
     else:
         recomp_docs = lambda x, y, z : y # use original docs, w/o recomp
     
-    # ext2gen generation models
+    # ext2gen pre-trained generation models
     if args.ext2gen:
         if model_name == "Qwen/Qwen2.5-7B-Instruct":
             generate_ext2gen = generate_qwen7b_dpo
@@ -106,7 +106,7 @@ def get_retrieval_chain(args, retriever, k, shuffle=False):
         else: # no need retrieval
             formatted_prompt = format_prompt_wo_retrieval(query)
         output = generate_ext2gen(formatted_prompt)
-        return output
+        return output, docs if args.recomp else [remove_metadata(doc.page_content) for doc in docs]
     
     def retrieval_chain(query):
         docs = get_k_from_retriever(retriever, k, query)
@@ -120,7 +120,7 @@ def get_retrieval_chain(args, retriever, k, shuffle=False):
             context = '\n'.join([remove_metadata(doc.page_content) for doc in docs])
         formatted_prompt = format_prompt_w_retrieval(query, context)
         output = generate_ext2gen(formatted_prompt)
-        return output
+        return output, docs if args.recomp else [remove_metadata(doc.page_content) for doc in docs]
     
     if args.adaptive:
         return adaptive_retrieval_chain
@@ -201,7 +201,7 @@ def eval_retriever(retriever, k, num_of_tests=len(data), hyde=False, eval_logger
 
 # Main evaluation functions
 def eval_full_chain(args, decided_retriever, k, num_of_tests=len(data), shuffle=False, verbose=False, 
-                   input_path=input_file_path, output_path=output_file_path,
+                   input_path=input_file_path, output_path=output_file_path, input_path_ragchecker=input_path_ragchecker,
                    eval_logger=None, hyde_logger=None):
     separator = "-" * 50
 
@@ -224,7 +224,7 @@ def eval_full_chain(args, decided_retriever, k, num_of_tests=len(data), shuffle=
             eval_logger.info(separator)
             eval_logger.info(f"Question {i}: {text_wrap(input)}")
 
-        chain_output = retrieval_chain(input)
+        chain_output, used_docs = retrieval_chain(input)
         outputs.append(chain_output)
         if verbose:
             print(f'Question: {input}')
@@ -238,16 +238,28 @@ def eval_full_chain(args, decided_retriever, k, num_of_tests=len(data), shuffle=
     print('Cleaning Output...')
     outputs = list(map(clean_output, outputs))
     print('Evaluating...')
+    # save output result
     result = []
     for i in range(num_of_tests):
         ans = get_answer(i)
         out = outputs[i]
-        result.append({'question':inputs[i], 'answers':[ans], 'generated_answer':[out]})
+        result.append({'question':inputs[i], 'answers':[ans], 'generated_answer':[out], 'used_docs': used_docs})
 
     result_str = list(map(lambda x:json.dumps(x, ensure_ascii=False), result))
     with open(input_path, 'w+', encoding='utf-8') as f:
         f.write('\n'.join(result_str))
+    # save output for RAG checker evaluation
+    result_ragchecker = []
+    for i in range(num_of_tests):
+        ans = get_answer(i)
+        out = outputs[i]
+        result_ragchecker.append({'query':inputs[i], 'gt_answer':[ans], 'response':[out], 'retrieved_context': [{'text': doc} for doc in used_docs]})
 
+    result_ragchecker_str = list(map(lambda x:json.dumps(x, ensure_ascii=False), result_ragchecker))
+    with open(input_path_ragchecker, 'w+', encoding='utf-8') as f:
+        f.write('\n'.join(result_ragchecker_str))
+    
+    # evaluate
     evaluate_by_dicts(input_path, output_path)
     with open(output_path, 'r', encoding='utf-8') as f:
         evaluations = json.load(f)

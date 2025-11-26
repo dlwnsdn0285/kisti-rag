@@ -11,7 +11,7 @@ from pipeline.common import setup_logger
 from pipeline.eval.eval import evaluate_by_dicts, recalculate_metrics
 from pipeline.util.kisti_data import sample_kisti, get_sample_paper, get_sample_qa
 from pipeline.util.dense_runnable import DenseRetrieverWithHyde
-from pipeline.common import input_path, output_path
+from pipeline.common import input_path, output_path, input_path_ragchecker
 
 import argparse
 
@@ -73,7 +73,7 @@ def full_chain(args):
 
 
     for k in ks: # [MODIFIED] args, decided_retriever added
-        result=eval_full_chain(args, decided_retriever, k, input_path=input_path, output_path=output_path, eval_logger=eval_logger, hyde_logger=hyde_logger)
+        result=eval_full_chain(args, decided_retriever, k, input_path=input_path, output_path=output_path, input_path_ragchecker=input_path_ragchecker, eval_logger=eval_logger, hyde_logger=hyde_logger)
         print(k, result)
 
 if __name__ == '__main__':

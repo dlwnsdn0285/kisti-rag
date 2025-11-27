@@ -42,7 +42,11 @@ def get_k_from_ensemble_retriever(retriever, k, query):
 def get_k_from_retriever(retriever, k, query):
     """Returns top k documents, without duplications.
     Always use this instead of .invoke method."""
+
+    if callable(retriever):
+        docs = retriever(query, k)
+        return docs[:k]
+    
     if isinstance(retriever, EnsembleRetriever):
         return get_k_from_ensemble_retriever(retriever, k, query)
     return get_k_from_plain_retriever(retriever, k, query)
-

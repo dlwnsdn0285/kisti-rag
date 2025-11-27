@@ -6,6 +6,7 @@ from datetime import datetime
 from pipeline.chunking.simple import get_simple_retriever
 from pipeline.chunking.sentence_parent import get_sentence_parent_retriever, delete_sentence_parent_retriever_data
 from pipeline.infer.infer import eval_retriever, eval_full_chain
+from pipeline.infer.qudar_retriever import make_qudar_retriever
 from pipeline.util.embed import delete_embeddings, remove_small_chunks
 from pipeline.common import setup_logger
 from pipeline.eval.eval import evaluate_by_dicts, recalculate_metrics
@@ -59,17 +60,35 @@ def retrieval_chain(retriever_type, args):
 
 def full_chain(args):
 
+    base_subdirectory = f'eval_full_chain/{args.retriever}'
+    eval_logger = setup_logger('eval_full_chain', subdirectory=base_subdirectory)
+    hyde_logger = setup_logger('hyde', subdirectory=base_subdirectory) if args.hyde==True else None
+
     # retriever 분기 (sparse/dense/ensemble/qudar) -> 정해진 하나의 retriever : decided_retriever
     ks = [8]
 
-    sparse_retriever = get_simple_retriever('bm25', 500, 50)
-    dense_retriever = DenseRetrieverWithHyde(get_simple_retriever('dense', 500, 50), hyde=args.hyde, hyde_logger=hyde_logger)
-
-    decided_retriever = None #####
-
-    base_subdirectory = f'eval_full_chain/{decided_retriever}'
-    eval_logger = setup_logger('eval_full_chain', subdirectory=base_subdirectory)
-    hyde_logger = setup_logger('hyde', subdirectory=base_subdirectory) if args.hyde==True else None
+    # retriever mapping
+    if args.retriever == 'dense' :
+        decided_retriever = DenseRetrieverWithHyde(get_simple_retriever('dense', 500, 50), hyde=args.hyde, hyde_logger=hyde_logger)
+    elif args.retriever == 'sparse' :
+        decided_retriever = get_simple_retriever('bm25', 500, 50)
+    elif args.retriever == 'ensemble' :
+        sparse_retriever = get_simple_retriever('bm25', 500, 50)
+        dense_retriever = DenseRetrieverWithHyde(get_simple_retriever('dense', 500, 50), hyde=args.hyde, hyde_logger=hyde_logger)
+        decided_retriever = EnsembleRetriever(
+            retrievers=[dense_retriever, sparse_retriever],
+            weights=[0.5, 0.5]
+        )
+    elif args.retriever == 'QUDAR_simple_rrf' :
+        decided_retriever = make_qudar_retriever(strategy="QUDAR_simple_rrf")
+    elif args.retriever == 'QUDAR_simple_equal' :
+        decided_retriever = make_qudar_retriever(strategy="QUDAR_simple_equal")
+    elif args.retriever == 'QUDAR_confidence' :
+        decided_retriever = make_qudar_retriever(strategy="QUDAR_confidence")
+    elif args.retriever == 'QUDAR_llm' :
+        decided_retriever = make_qudar_retriever(strategy="QUDAR_llm")
+    else : 
+        raise ValueError(f"Unknown retriever type: {args.retriever}.")
 
 
     for k in ks: # [MODIFIED] args, decided_retriever added

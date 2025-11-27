@@ -1,5 +1,5 @@
-from get_ext2en_koni4b import generate_koni4b_dpo # when use ext2gen
-from get_ext2gen_qwen7b import generate_qwen7b_dpo # when use ext2gen
+from .get_ext2en_koni4b import generate_koni4b_dpo # when use ext2gen
+from .get_ext2gen_qwen7b import generate_qwen7b_dpo # when use ext2gen
 from ..common import model_name
 
 

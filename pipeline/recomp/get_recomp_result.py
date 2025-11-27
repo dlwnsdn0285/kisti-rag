@@ -1,6 +1,6 @@
 from transformers import AutoTokenizer, AutoModel
 from tqdm import tqdm
-from run_extractive_compressor import get_contriever_scores
+from .run_extractive_compressor import get_contriever_scores
 import pandas as pd
 from ..common import recomp_contriever_path
 

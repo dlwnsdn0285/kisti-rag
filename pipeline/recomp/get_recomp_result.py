@@ -12,7 +12,7 @@ def get_llm_input(model_path, input_data_df, device, sentence_top_k=20):
     # get contriever scores
     contriever_scores = []
 
-    for _, data in tqdm(input_data_df.iterrows(), total=len(input_data_df)):
+    for _, data in tqdm(input_data_df.iterrows(), total=len(input_data_df), desc='Getting contriever scores'):
         scores = get_contriever_scores(model, tokenizer, data, 'cuda:{}'.format(device), top_k=sentence_top_k)
         contriever_scores.append((scores, data['retrieved_docs']))
 

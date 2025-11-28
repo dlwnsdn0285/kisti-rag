@@ -97,10 +97,13 @@ def get_retrieval_chain(args, retriever, k, shuffle=False):
             else:
                 context = '\n'.join([remove_metadata(doc.page_content) for doc in docs])
             formatted_prompt = format_prompt_w_retrieval(query, context)
+            output = generate_ext2gen(formatted_prompt)
+            
+            return output, docs if args.recomp else [remove_metadata(doc.page_content) for doc in docs]
         else: # no need retrieval
             formatted_prompt = format_prompt_wo_retrieval(query)
-        output = generate_ext2gen(formatted_prompt)
-        return output, docs if args.recomp else [remove_metadata(doc.page_content) for doc in docs]
+            output = generate_ext2gen(formatted_prompt)
+            return output, [] # no docs used
     
     def retrieval_chain(query):
         docs = get_k_from_retriever(retriever, k, query)
@@ -226,7 +229,7 @@ def eval_full_chain(args, decided_retriever, k, num_of_tests=len(data), shuffle=
             print(f'Generated: {clean_output(chain_output)}')
             print()
         if eval_logger:
-            eval_logger.info(f"Generated Answer: {text_wrap(clean_output(chain_output))}")
+            eval_logger.info(f"Generated Answer: {clean_output(chain_output)}")
             eval_logger.info(f"Correct Answer: {text_wrap(get_answer(i))}")
 
     print('Cleaning Output...')
@@ -254,14 +257,14 @@ def eval_full_chain(args, decided_retriever, k, num_of_tests=len(data), shuffle=
         f.write('\n'.join(result_ragchecker_str))
     
     # evaluate
-    evaluate_by_dicts(input_path, output_path)
-    with open(output_path, 'r', encoding='utf-8') as f:
-        evaluations = json.load(f)
-    llm_eval = RAG_eval_w_LLM(input_path, llm_output_file_path)
-    evaluations['llm'] = llm_eval
+    #evaluate_by_dicts(input_path, output_path)
+    #with open(output_path, 'r', encoding='utf-8') as f:
+    #    evaluations = json.load(f)
+    #llm_eval = RAG_eval_w_LLM(input_path, llm_output_file_path)
+    #evaluations['llm'] = llm_eval
 
-    if eval_logger:
-        eval_logger.info(separator)
-        eval_logger.info(f"Evaluation complete. Final result: {evaluations}")
+    #if eval_logger:
+    #    eval_logger.info(separator)
+    #    eval_logger.info(f"Evaluation complete. Final result: {evaluations}")
     
-    return evaluations
+    #return evaluations

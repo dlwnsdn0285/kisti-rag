@@ -21,7 +21,7 @@ class Qwen7bGenerator:
             self.checkpoint_path, 
             torch_dtype="auto", 
             device_map="auto"
-        ).cuda()
+        )
         
         self._is_loaded = True
     

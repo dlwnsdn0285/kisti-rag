@@ -234,7 +234,7 @@ def eval_full_chain(args, decided_retriever, k, num_of_tests=len(data), shuffle=
 
     print('Cleaning Output...')
     outputs = list(map(clean_output, outputs))
-    print('Evaluating...')
+    print('Saving output...')
     # save output result
     result = []
     for i in range(num_of_tests):
@@ -257,6 +257,7 @@ def eval_full_chain(args, decided_retriever, k, num_of_tests=len(data), shuffle=
         f.write('\n'.join(result_ragchecker_str))
     
     # evaluate
+    print('Evaluating...')
     #evaluate_by_dicts(input_path, output_path)
     #with open(output_path, 'r', encoding='utf-8') as f:
     #    evaluations = json.load(f)

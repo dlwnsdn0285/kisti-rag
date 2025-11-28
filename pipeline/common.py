@@ -20,9 +20,9 @@ input_path = 'results/generated_answer.json'
 output_path = 'results/evaluation.json'
 input_path_ragchecker = 'multidim_evaluation/data_formatted/generated_answer.json'
 # pre-trained model path for recomp contriever and ext2gen generation models
-recomp_contriever_path = 'train/train_bi-encoder-mnrl-facebook-mcontriever-msmarco-2025-09-22_12-31-13'
-ext2gen_qwen7b_path = 'train/qwen7b_dpo_final_total_naive_prompt'
-ext2gen_koni4b_path = 'train/koni4b_dpo_final_total_naive_prompt'
+recomp_contriever_path = "minjeongB/recomp-mcontriever-kisti" # huggingface path
+ext2gen_qwen7b_path = "minjeongB/ext2gen-qwen2.5-7b-kisti" # huggingface path
+ext2gen_koni4b_path = "minjeongB/ext2gen-koni-4b-kisti" # huggingface path
 
 # Initialize Kiwi
 kiwi = Kiwi()

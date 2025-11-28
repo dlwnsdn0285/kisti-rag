@@ -91,7 +91,7 @@ def get_retrieval_chain(args, retriever, k, shuffle=False):
             if shuffle:
                 random.shuffle(docs)
             docs = reranked_docs(query, docs)
-            docs = recomp_docs(query, docs, sentence_top_k=20) # when use recomp
+            docs = recomp_docs(query, docs, 20) # when use recomp
             if args.recomp:
                 context = '\n'.join(docs) # recomp_docs returns list of sentences
             else:
